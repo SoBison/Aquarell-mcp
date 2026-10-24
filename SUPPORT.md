@@ -68,6 +68,11 @@ the actual store build after upload.
 
 ## Distribution checks / 分发检查
 
+The preview source is public at [SoBison/Aquarell-mcp](https://github.com/SoBison/Aquarell-mcp).
+The [first hosted workflow](https://github.com/SoBison/Aquarell-mcp/actions/runs/40106901376)
+passed for commit `6926a2656a0ab3e68208f54abe44882ebace869a`.
+预览源码仓库已公开，首次托管工作流已通过；这不代表下列商店和真机验收已经完成。
+
 The installer suite uses only temporary HOME directories, synthetic app metadata,
 and temporary config files. It verifies private permissions, exact config
 backups, preservation of unrelated servers, explicit edit opt-in, conflict and

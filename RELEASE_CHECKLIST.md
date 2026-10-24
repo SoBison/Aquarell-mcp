@@ -1,13 +1,12 @@
 # Aquarell MCP release checklist / 发布清单
 
-This checklist records remaining release gates; it does not claim they passed.
-本清单列出正式发布前的验收项，不表示这些项目已完成。
+Checked items have recorded evidence; unchecked items remain release gates.
+已勾选项目具有对应证据；未勾选项目仍需正式发布前验收。
 
-The selected repository name is **Aquarell-mcp**. Existing MPL 2.0 licensing
-and compatibility identifiers remain unchanged; selecting a name does not
-authorize publication or change the license.
-已选定仓库名 **Aquarell-mcp**。现有 MPL 2.0 许可和兼容标识保持不变；选定名称
-不代表已授权发布或变更许可证。
+The repository is [SoBison/Aquarell-mcp](https://github.com/SoBison/Aquarell-mcp).
+The owner authorized publication through GitHub Desktop. Existing MPL 2.0
+licensing and compatibility identifiers remain unchanged.
+仓库已通过 GitHub Desktop 按所有者授权公开发布；现有 MPL 2.0 许可和兼容标识保持不变。
 
 - [ ] Owner reviews the existing MPL 2.0 license and copyright notices, then
   confirms the Aquarell-mcp repository URL, support channel, and private
@@ -40,9 +39,11 @@ authorize publication or change the license.
 - [ ] Build the archive from a reviewed source revision, inspect its allowlist,
   verify hashes, scan for credentials/private paths and verify extraction and
   install from that exact archive. / 检查实际压缩包清单、哈希及隐私，解压验收。
-- [ ] Export a fresh standalone source tree, run its tests and build script
+- [x] Export a fresh standalone source tree, run its tests and build script
   without the app repository, inspect its manifest, and run hosted CI after
   creating the repository. / 验证独立源码导出、脱离 App 仓库运行及发布后的托管 CI。
-- [ ] Publish the bridge only after the owner authorizes GitHub publication;
+  Hosted evidence: [first successful run](https://github.com/SoBison/Aquarell-mcp/actions/runs/40106901376)
+  for commit `6926a2656a0ab3e68208f54abe44882ebace869a`.
+- [x] Publish the bridge only after the owner authorizes GitHub publication;
   publish no app signing files, artwork, connection files or client configs.
   / 获所有者授权后发布，不上传签名文件、作品、连接文件或用户配置。

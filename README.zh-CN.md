@@ -152,7 +152,10 @@ python3 build-release.py --output dist
 其 GitHub 工作流在 Linux 上测试 Python 3.9，并在 Linux/macOS 上测试当前 Python，
 随后构建相同的 11 文件用户 ZIP。使用官方 [checkout](https://github.com/actions/checkout)
 和 [setup-python](https://github.com/actions/setup-python) Actions，仓库权限只读，
-没有发布步骤。此未发布预览尚未执行 GitHub 托管 CI；CI 使用合成 App 元数据，不能
+没有发布步骤。预览源码已发布至 [SoBison/Aquarell-mcp](https://github.com/SoBison/Aquarell-mcp)，
+提交 `6926a2656a0ab3e68208f54abe44882ebace869a` 的
+[首次托管 CI](https://github.com/SoBison/Aquarell-mcp/actions/runs/40106901376) 已通过；
+后续版本状态见 [Actions](https://github.com/SoBison/Aquarell-mcp/actions)。CI 使用合成 App 元数据，不能
 代替真实签名 App 或商店发行包验收。不要独立修改导出的桥接与 App 中的传输源码，
 每次发布应从审核后的唯一源码重新导出。
 

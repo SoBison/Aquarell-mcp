@@ -181,8 +181,12 @@ Its GitHub workflow tests Python 3.9 on Linux and the current Python on Linux an
 macOS, then builds the same 11-file end-user ZIP. The workflow uses the official
 [checkout](https://github.com/actions/checkout) and
 [setup-python](https://github.com/actions/setup-python) actions with read-only
-repository permissions and no publishing step. Hosted CI has not been run for
-this unpublished preview. CI uses synthetic app metadata; it does not replace
+repository permissions and no publishing step. The preview source is published
+at [SoBison/Aquarell-mcp](https://github.com/SoBison/Aquarell-mcp). Its
+[first hosted CI run](https://github.com/SoBison/Aquarell-mcp/actions/runs/40106901376)
+passed for commit `6926a2656a0ab3e68208f54abe44882ebace869a`; see
+[Actions](https://github.com/SoBison/Aquarell-mcp/actions) for later revisions.
+CI uses synthetic app metadata; it does not replace
 real signed-app or store-build acceptance. Do not edit the exported bridge and
 the app's transport independently; regenerate the export from reviewed canonical
 source for each release.
