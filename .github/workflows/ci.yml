@@ -1,0 +1,34 @@
+name: Bridge package checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: '3.9'
+          - os: ubuntu-latest
+            python: '3.x'
+          - os: macos-latest
+            python: '3.x'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Isolated installer and read-only transport checks
+        run: python -m unittest discover -s tests -v
+      - name: Build the explicit-allowlist end-user archive
+        run: python build-release.py --output dist

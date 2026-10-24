@@ -1,0 +1,22 @@
+{
+  "projectName": "Aquarell-mcp",
+  "schemaVersion": 1,
+  "sha256": {
+    ".github/workflows/ci.yml": "52d670e0dcf7dd1657fa7cf382150c76c63461e210954662d89bf62ffa21182e",
+    ".gitignore": "d6d13ea97074e87aa84224ed52d1d6504f18ce352d8e8d9ad1e788cc5123935c",
+    "LICENSE": "c76f740d1521b9bed9ca7a04ad526c310493c62621b1341d623b431736533b30",
+    "README.md": "24b6ca205345634899c8da2840fc344fd0682f5901acad764deb8e09dd00f0cc",
+    "README.zh-CN.md": "d484f99ae016acd34f0442e138ae8dc45a396fab3e657982b295de30a0ab6e91",
+    "RELEASE_CHECKLIST.md": "ac489ea9fcdcfcab425f431986d5b5a53b4297038b24cfda54c57dd2631efd11",
+    "SECURITY.md": "e606eafa3b3a5af874b13bfa6a4f53b7b9b741b9cd64ce3c11ca11fc68a3b1c8",
+    "SUPPORT.md": "28aec59aaf918b0330e73779d593bb3ffb710f3de5fdcce229b9fafc8fb803c7",
+    "VERSION": "b52d8845641f926c4f177b373c8296662b75f5a3f7f6053ee4c13ab6801180c8",
+    "build-release.py": "024af1196dc57e121d3f755211fd70218845c6fbc80879ba3961e71c52351a4f",
+    "locales.json": "99605c4cfe1efd764c16a10a79913f9e8bc5b85d6ce29875ddfbc0bd216c9da9",
+    "pastel-mcp-bridge.py": "6733eb30cb91b6efbbc1317e068fd3e5d9bb2840f39066e77a0aedcfbba087ed",
+    "pastel_mcp.py": "89c1993f6258b0aaeda98db6ac764df1059bfd3d4bcde76941f70ae3082ff149",
+    "tests/test_install.py": "9f9ccb447ed7a9332b8978fe0acf6c2e94f85db61738b06de165759e2e021d59",
+    "tests/test_read_only.py": "3a5fdb3b8fb0bb130d17eb0e4e962a11e3e617f868a744ecd254cb1fec1cacac"
+  },
+  "version": "0.1.0-preview.1"
+}
