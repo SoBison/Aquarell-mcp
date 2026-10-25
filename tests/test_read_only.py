@@ -1,6 +1,8 @@
 import copy
 import importlib.util
+import io
 from pathlib import Path
+import tempfile
 import unittest
 from unittest import mock
 
@@ -134,6 +136,72 @@ class ReadOnlyTests(unittest.TestCase):
         with self.assertRaises(transport.BridgeError):
             self.bridge.forward(value)
         self.assertEqual([item["method"] for item in self.calls], ["server/discover", "tools/list"])
+
+
+class LaunchPolicyTests(unittest.TestCase):
+    def test_first_use_is_attempted_once_across_health_checks_and_fresh_bridges(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                mock.patch.object(transport, "LocalPairing"), \
+                mock.patch.object(transport.subprocess, "run", return_value=mock.Mock(returncode=1)) as opened:
+            connection_file = Path(temporary) / "connection.json"
+            for _ in range(3):
+                bridge = transport.PastelBridge(paths=[connection_file])
+                self.addCleanup(bridge.close)
+                bridge.installed_application = mock.Mock(return_value=Path(temporary) / "Aquarell.app")
+                bridge.current_connection = mock.Mock(return_value=None)
+                bridge.request = mock.Mock()
+                for method in ("initialize", "server/discover", "ping", "notifications/initialized", "notifications/cancelled"):
+                    for _ in range(2):
+                        with self.subTest(method=method), self.assertRaises(transport.BridgeError):
+                            bridge.forward({"jsonrpc": "2.0", "id": "health", "method": method})
+                bridge.request.assert_not_called()
+            self.assertTrue(connection_file.with_name(transport.BOOTSTRAP_MARKER).is_file())
+        self.assertEqual(opened.call_count, 1)
+
+    def test_existing_connection_consumes_explicit_bootstrap_before_quit(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                mock.patch.object(transport, "LocalPairing"), \
+                mock.patch.object(transport.subprocess, "run", return_value=mock.Mock(returncode=1)) as opened:
+            connection_file = Path(temporary) / "connection.json"
+            bridge = transport.PastelBridge(paths=[connection_file])
+            self.addCleanup(bridge.close)
+            bridge.installed_application = mock.Mock(return_value=Path(temporary) / "Aquarell.app")
+            state = {"connection": {"pid": 123, "port": 4567, "token": "fixture-not-a-real-token"}}
+            bridge.current_connection = mock.Mock(side_effect=lambda: state["connection"])
+            bridge.request = mock.Mock()
+            self.assertIs(bridge.connection(), state["connection"])
+            state["connection"] = None
+            for method in ("initialize", "server/discover", "ping"):
+                with self.subTest(method=method), self.assertRaises(transport.BridgeError):
+                    bridge.forward({"jsonrpc": "2.0", "id": "after-quit", "method": method})
+            restarted = transport.PastelBridge(paths=[connection_file])
+            self.addCleanup(restarted.close)
+            restarted.installed_application = bridge.installed_application
+            with self.assertRaises(transport.BridgeError):
+                restarted.connection()
+            bridge.request.assert_not_called()
+        opened.assert_not_called()
+
+    def test_stdio_uses_guarded_first_use_and_pair_only_is_manual_override(self):
+        variants = [([], True), (["--no-launch"], False), (["--pair-only"], True),
+                    (["--pair-only", "--no-launch"], False)]
+        for arguments, launches in variants:
+            with self.subTest(arguments=arguments), \
+                    mock.patch.object(transport.sys, "argv", [str(SOURCE)] + arguments), \
+                    mock.patch.object(transport.sys, "stdout", io.StringIO()), \
+                    mock.patch.object(transport, "PastelBridge") as bridge_class:
+                bridge = bridge_class.return_value
+                bridge.connection.return_value = {"pid": 123, "port": 4567}
+                self.assertIsNone(transport.main())
+                self.assertIs(bridge_class.call_args.kwargs["launch"], launches)
+                self.assertIs(bridge_class.call_args.kwargs["manual_bootstrap"], "--pair-only" in arguments)
+                if "--pair-only" in arguments:
+                    bridge.connection.assert_called_once()
+                    bridge.serve.assert_not_called()
+                else:
+                    bridge.serve.assert_called_once()
+                    bridge.connection.assert_not_called()
+                bridge.close.assert_called_once()
 
 
 if __name__ == "__main__":

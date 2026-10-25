@@ -83,6 +83,22 @@ bundles are never launched or treated as a passing app-signature/pairing test.
 保留、显式编辑授权、冲突和链接拒绝、升级卸载、五语言、打包清单、哈希及实际解压
 安装流程。合成应用包不会被启动，也不构成真实签名与配对验证。
 
+The first local `serve` connection may open the app once. The transport persists
+this first-use record across bridges, client restarts, upgrades and bridge
+uninstall; an existing pairing file counts as prior use. After quitting,
+subsequent connections leave the app
+closed until an explicit manual `pair`. `--no-launch` disables even the first
+automatic opening. Missing-app diagnostics direct users to install Aquarell from
+the App Store and open it. Isolated wrapper tests verify policy forwarding,
+one-shot pairing, cleanup and redacted diagnostics; app-exit behavior
+still needs acceptance on each shipping client/build after upgrading and reloading
+the bridge.
+本机首次 `serve` 连接可自动打开 App 一次；传输层持久记录首次使用，跨桥接、客户端
+重启、升级和桥接卸载保留，已有配对文件也视为用过。退出 App 后，后续连接保持关闭，需手动 `pair`
+恢复；`--no-launch` 可禁用首次自动打开。未安装时会提示从 App Store 安装 Aquarell
+并打开。隔离包装器测试验证策略传递、单次配对、资源清理和脱敏错误；升级并重载
+桥接后，仍需对各发行客户端与构建验收退出行为。
+
 Read-only bridge tests stub network delivery and assert write calls never reach
 an already-editable app connection, including forged client hints, unknown
 methods, duplicate/malformed definitions and discovery failures. They validate

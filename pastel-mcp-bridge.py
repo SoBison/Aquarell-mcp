@@ -29,6 +29,7 @@ import urllib.parse
 MAX_REQUEST = 8 * 1024 * 1024
 MAX_RESPONSE = 32 * 1024 * 1024
 MAX_DESCRIPTOR = 16 * 1024
+BOOTSTRAP_MARKER = ".bootstrap-used.json"
 MODERN_PROTOCOL = "2026-07-28"
 PROTOCOL_VERSION_META = "io.modelcontextprotocol/protocolVersion"
 CLIENT_CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities"
@@ -37,6 +38,7 @@ CONNECTION_ERROR = (
     "This request was not retried. If an edit may have run, inspect the artwork before "
     "retrying; after a service restart, read its state before making a new edit."
 )
+MISSING_APP_ERROR = "Aquarell is not installed. Install Aquarell from the App Store, then open it and enable AI Control (MCP)."
 
 
 class BridgeError(Exception):
@@ -150,7 +152,12 @@ def private_directory(path):
 
 @contextlib.contextmanager
 def private_lock(directory_fd, name, timeout, message):
-    fd = os.open(name, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+    # Darwin can report ENOENT when concurrent O_CREAT|O_NOFOLLOW calls create
+    # the same new file. Exclusive creation has an unambiguous losing path.
+    try:
+        fd = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+    except FileExistsError:
+        fd = os.open(name, os.O_RDWR | os.O_NOFOLLOW, dir_fd=directory_fd)
     try:
         info = os.fstat(fd)
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
@@ -232,6 +239,32 @@ def pairing_lock(path, timeout):
     with private_directory(path) as directory_fd, private_lock(directory_fd, ".pairing.lock", timeout,
             "Another Pastel bridge is pairing. Wait for it to finish and reconnect."):
         yield
+
+
+def consume_bootstrap(path):
+    """Claim first use once for this private directory and Pastel app identity."""
+    with private_directory(path) as directory_fd:
+        try:
+            fd = os.open(BOOTSTRAP_MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=directory_fd)
+        except FileExistsError:
+            fd = os.open(BOOTSTRAP_MARKER, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
+            try:
+                info = os.fstat(fd)
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                        or stat.S_IMODE(info.st_mode) != 0o600):
+                    raise BridgeError("Pastel's first-connection record must be a private 0600 regular file.")
+            finally:
+                os.close(fd)
+            # Even an incomplete record left by an interrupted launch consumes
+            # automatic startup. Manual pairing remains an explicit way forward.
+            return False
+        with os.fdopen(fd, "wb") as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(b'{"version":1,"bundleIdentifier":"com.bzy.pastel"}\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        return True
 
 
 def app_bundle(application):
@@ -390,18 +423,19 @@ class LocalPairing:
 
 class PastelBridge:
     def __init__(self, paths=None, app=None, launch=True, startup_timeout=35, request_timeout=150,
-                 read_only=False):
+                 read_only=False, manual_bootstrap=False):
         self.paths = [Path(p) for p in (paths if paths is not None else descriptor_paths())]
         self.app = Path(app) if app else None
         self.launch = launch
         self.startup_timeout = startup_timeout
         self.request_timeout = request_timeout
         self.read_only = read_only
+        self.manual_bootstrap = manual_bootstrap
         self.launch_lock = threading.Lock()
         self.output_lock = threading.Lock()
         self.cancellation_lock = threading.Lock()
         self.modern_requests = {}
-        self.last_launch = float("-inf")
+        self.bootstrap_consumed = False
         self.protocol_version = "2025-11-25"
         self.pairing = None
 
@@ -419,24 +453,72 @@ class PastelBridge:
                 continue
         return None
 
+    def installed_application(self):
+        candidates = [self.app] if self.app else [directory / name
+            for directory in (Path.home() / "Applications", Path("/Applications"))
+            for name in ("Aquarell.app", "Pastel.app")]
+        return next((path for path in candidates if path and path.is_dir()), None)
+
+    def history_path(self):
+        if not self.paths:
+            raise BridgeError("Pastel's private connection directory is required for first-time pairing.")
+        return self.paths[0].with_name("connection.json")
+
+    def has_connection_history(self):
+        for index, path in enumerate(self.paths):
+            try:
+                os.lstat(path)
+                return True
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            except OSError:
+                # A protected fallback container is not the authoritative host
+                # history. The primary private directory must remain accessible.
+                if index == 0:
+                    raise BridgeError("Pastel's previous connection history could not be checked safely.") from None
+        return False
+
+    def remember_connection_history(self):
+        with pairing_lock(self.history_path(), self.startup_timeout):
+            consume_bootstrap(self.history_path())
+        self.bootstrap_consumed = True
+
     def launch_app(self):
         if not self.launch:
-            raise BridgeError(CONNECTION_ERROR)
+            with self.launch_lock:
+                if not self.bootstrap_consumed and self.has_connection_history():
+                    self.remember_connection_history()
+            raise BridgeError(CONNECTION_ERROR if self.installed_application() is not None else MISSING_APP_ERROR)
         # A concurrent request must not start a second app or interrupt an edit.
         with self.launch_lock:
             value = self.current_connection()
             if value is not None:
+                if not self.bootstrap_consumed:
+                    self.remember_connection_history()
                 return value
-            if time.monotonic() - self.last_launch < 5:
-                raise BridgeError(CONNECTION_ERROR)
-            candidates = [self.app] if self.app else [Path.home() / "Applications/Pastel.app", Path("/Applications/Pastel.app")]
-            application = next((p for p in candidates if p and p.is_dir()), None)
-            if application is None:
-                raise BridgeError("Pastel is not installed. Install Pastel.app in ~/Applications or /Applications.")
-            with pairing_lock(self.paths[0], self.startup_timeout):
+            if self.bootstrap_consumed:
+                raise BridgeError(CONNECTION_ERROR if self.installed_application() is not None else MISSING_APP_ERROR)
+            application = self.installed_application()
+            if application is None and not self.has_connection_history():
+                raise BridgeError(MISSING_APP_ERROR)
+            # Missing apps without prior history do not consume first use. Every
+            # actual attempt, including a failure, is consumed before `open`.
+            self.bootstrap_consumed = True
+            with pairing_lock(self.history_path(), self.startup_timeout):
                 value = self.current_connection()
                 if value is not None:
+                    consume_bootstrap(self.history_path())
                     return value
+                history = self.has_connection_history()
+                if history:
+                    consume_bootstrap(self.history_path())
+                if application is None:
+                    raise BridgeError(MISSING_APP_ERROR)
+                if history and not self.manual_bootstrap:
+                    raise BridgeError(CONNECTION_ERROR)
+                first_use = consume_bootstrap(self.history_path())
+                if not self.manual_bootstrap and not history and not first_use:
+                    raise BridgeError(CONNECTION_ERROR)
                 try:
                     pairing = LocalPairing(application, self.paths[0], allow_refresh=True)
                     pairing.__enter__()
@@ -465,13 +547,16 @@ class PastelBridge:
                             pairing.__exit__(None, None, None)
                 except (OSError, subprocess.TimeoutExpired):
                     raise BridgeError("Pastel could not be opened or paired. Open it manually and enable AI Control (MCP).") from None
-                finally:
-                    self.last_launch = time.monotonic()
 
     def connection(self):
-        value = self.current_connection()
-        if value is not None:
-            return value
+        with self.launch_lock:
+            value = self.current_connection()
+            if value is not None:
+                # Seeing an existing app also completes bootstrap. Its later
+                # disappearance may mean the user chose to close the app.
+                if not self.bootstrap_consumed:
+                    self.remember_connection_history()
+                return value
         return self.launch_app()
 
     def forward(self, message):
@@ -519,8 +604,7 @@ class PastelBridge:
         with self.launch_lock:
             if self.pairing is not None and self.pairing.server.target_pid == connection["pid"]:
                 return
-            candidates = [self.app] if self.app else [Path.home() / "Applications/Pastel.app", Path("/Applications/Pastel.app")]
-            application = next((p for p in candidates if p and p.is_dir()), None)
+            application = self.installed_application()
             if application is None:
                 raise BridgeError("Pastel's installed app is required to verify local connection refresh.")
             pairing = LocalPairing(application, self.paths[0], allow_refresh=True, target_pid=connection["pid"])
@@ -700,12 +784,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--connection-file", type=Path, help="Use a specific private app connection file.")
     parser.add_argument("--app", type=Path, help="Installed Pastel.app path (optional).")
-    parser.add_argument("--no-launch", action="store_true", help="Do not open the app when disconnected.")
+    parser.add_argument("--no-launch", action="store_true", help="Never launch the app, including first-time pairing.")
     parser.add_argument("--read-only", action="store_true", help="Enforce read-only tools on this bridge, including reused connections; do not grant editing on launch.")
-    parser.add_argument("--pair-only", action="store_true", help="Pair or reuse the installed app, print safe metadata, and exit.")
+    parser.add_argument("--pair-only", action="store_true", help="Explicitly open the app once if needed, pair, print safe metadata, and exit.")
     args = parser.parse_args()
     bridge = PastelBridge(paths=[args.connection_file] if args.connection_file else None,
-                          app=args.app, launch=not args.no_launch, read_only=args.read_only)
+                          app=args.app, launch=not args.no_launch, read_only=args.read_only,
+                          manual_bootstrap=args.pair_only)
     try:
         if args.pair_only:
             value = bridge.connection()

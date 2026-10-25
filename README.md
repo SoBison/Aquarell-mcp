@@ -42,7 +42,7 @@ python3 pastel_mcp.py doctor
 
 The installer finds the app by bundle identifier, including apps displayed as
 “Aquarell”. If detection fails, add `--app "/Applications/Aquarell.app"` to
-`install`, `init-config`, or `doctor`. It reads bundle metadata; the transport
+`install`, `init-config`, `pair`, or `doctor`. It reads bundle metadata; the transport
 independently validates the app's Apple signature and running process during
 pairing. It does not change Gatekeeper or install a development-signed app.
 
@@ -89,8 +89,7 @@ No token is included in either format. Field names follow the
 Generated configs default to a read-only bridge, including when the app already
 allows editing. The bridge checks the authenticated app's current tool definitions
 and blocks tools without an explicit read-only annotation and unknown methods.
-To permit edit requests and request app editing access at launch, add
-`--allow-edits` when generating config:
+To permit edit requests, add `--allow-edits` when generating config:
 
 ```sh
 python3 pastel_mcp.py init-config --allow-edits
@@ -102,15 +101,42 @@ not revoke editing access from other clients or change the app's settings.
 
 ## Pair and check
 
-On the first client connection, the bridge can open the app and pass a temporary
-loopback callback. Only the matching Apple-signed app and its verified process
+The first local MCP connection can automatically open the installed app and
+pair it once. This first-use record is shared by this macOS user's bridges and
+persists across client restarts, upgrades and bridge uninstall; an existing
+pairing file also counts as prior use. After you quit the app, tool discovery,
+reconnects and client restarts leave
+it closed. After a bridge upgrade, reload the server in your client so it uses
+the updated code.
+
+If Aquarell is missing, install it from the App Store and open it, then reconnect.
+Use `--app` when it is installed at a nondefault path. To disable even the first
+automatic opening, generate the config with `init-config --no-launch`.
+Existing configs with `--no-launch` keep that restriction; removing it does not
+clear prior-use history.
+
+After quitting, explicitly start and pair the app when you want to resume MCP:
+
+```sh
+python3 pastel_mcp.py pair
+```
+
+Use `pair --allow-edits` to also request the app's editing access, and generate
+the client config with `init-config --allow-edits` if editing is intended.
+These two switches do not bypass the app's AI Control settings. Pass `--app`
+to `pair` when using a nondefault installation.
+
+Both the first connection and the one-shot `pair` command can pass a temporary loopback
+callback. `pair` then exits without serving client requests. Only the matching
+Apple-signed app and its verified process
 can publish credentials. Credentials stay in the current user's private local
 pairing file. They are never written into a client config or command arguments.
 Keep the app window open while using MCP; iOS can stop the service in the
 background. Normal macOS focus changes are supported.
 
 If the app was already running before pairing, save your work, quit normally,
-and reconnect the MCP client. The bridge never force-quits the app. Once paired,
+and run `pair` again. After intentionally quitting the app, run `pair` again when
+you want to resume MCP. The bridge never force-quits the app. Once paired,
 running bridges subscribe to connection updates for service restarts and token
 changes. If all bridges were closed while credentials were revoked, normal app
 exit and pairing may still be required. A failed or uncertain edit is never
@@ -144,8 +170,9 @@ python3 pastel_mcp.py uninstall
 To also remove this installation's entry from a JSON client config, add
 `--config "/path/to/client-config.json"`. An exact private backup is retained.
 It refuses to remove another installation's entry. Manually remove a generated
-Codex TOML section. Shared pairing files, previous installation backups, the app,
-and all artwork are preserved. Other clients may still depend on shared pairing.
+Codex TOML section. Shared pairing files, first-use history, previous installation
+backups, the app, and all artwork are preserved. Other clients may still depend
+on shared pairing.
 
 ## Source and validation
 

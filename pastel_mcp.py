@@ -98,6 +98,8 @@ def valid_app(path):
 def find_app(explicit=None):
     if explicit is not None:
         candidate = Path(explicit).expanduser().absolute()
+        if not candidate.exists():
+            fail("app_missing")
         if not valid_app(candidate):
             fail("invalid_app")
         return candidate
@@ -285,6 +287,8 @@ def configuration(args):
     cli = installed_cli()
     command = str(Path(sys.executable).absolute())
     arguments = [str(cli), "serve", "--app", str(application)]
+    if args.no_launch:
+        arguments.append("--no-launch")
     if args.allow_edits:
         arguments.append("--allow-edits")
     return {"command": command, "args": arguments}
@@ -377,11 +381,29 @@ def uninstall(args):
 
 def serve(args):
     check_host()
+    application = find_app(args.app)
     module = load_bridge()
-    bridge = module.PastelBridge(app=find_app(args.app), launch=not args.no_launch,
+    # The transport persists the one-time first-connection bootstrap claim.
+    # Reconnects and new client processes must respect an already closed app.
+    bridge = module.PastelBridge(app=application, launch=not args.no_launch,
                                  read_only=not args.allow_edits)
     try:
         bridge.serve()
+    finally:
+        bridge.close()
+
+
+def pair(args):
+    check_host()
+    application = find_app(args.app)
+    module = load_bridge()
+    bridge = module.PastelBridge(app=application, launch=True, manual_bootstrap=True,
+                                 read_only=not args.allow_edits)
+    try:
+        bridge.connection()
+        print(json.dumps({"paired": True}))
+    except module.BridgeError:
+        fail("pair_failed")
     finally:
         bridge.close()
 
@@ -444,12 +466,17 @@ def parser():
     config.add_argument("--output", type=Path, help=message("output_help"))
     config.add_argument("--replace", action="store_true", help=message("replace_help"))
     config.add_argument("--allow-edits", action="store_true", help=message("edits_help"))
+    config.add_argument("--no-launch", action="store_true", help=message("launch_help"))
     config.set_defaults(action=init_config)
     run = commands.add_parser("serve", help=message("serve_help"))
     run.add_argument("--app", type=Path, help=message("app_help"))
     run.add_argument("--allow-edits", action="store_true", help=message("edits_help"))
     run.add_argument("--no-launch", action="store_true", help=message("launch_help"))
     run.set_defaults(action=serve)
+    pairing = commands.add_parser("pair", help=message("pair_help"), description=message("pair_help"))
+    pairing.add_argument("--app", type=Path, help=message("app_help"))
+    pairing.add_argument("--allow-edits", action="store_true", help=message("edits_help"))
+    pairing.set_defaults(action=pair)
     diagnostic = commands.add_parser("doctor", help=message("doctor_help"))
     diagnostic.add_argument("--app", type=Path, help=message("app_help"))
     diagnostic.add_argument("--connect", action="store_true", help=message("connect_help"))

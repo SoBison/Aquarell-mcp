@@ -145,10 +145,16 @@ class InstallTests(unittest.TestCase):
         pairing = destination.parent / "connection.json"
         pairing.write_bytes(b"sensitive fixture; never copied")
         pairing.chmod(0o600)
+        history = destination.parent / ".bootstrap-used.json"
+        history_value = b'{"version":1,"bundleIdentifier":"com.bzy.pastel"}'
+        history.write_bytes(history_value)
+        history.chmod(0o600)
         self.install()
+        self.assertEqual(history.read_bytes(), history_value)
         self.assertEqual(self.cli("uninstall")[0], 0)
         self.assertFalse(destination.exists())
         self.assertEqual(pairing.read_bytes(), b"sensitive fixture; never copied")
+        self.assertEqual(history.read_bytes(), history_value)
 
     def test_json_merge_preserves_values_exact_backup_and_permissions(self):
         self.install()
@@ -160,6 +166,7 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(updated["preferences"], value["preferences"])
         self.assertEqual(updated["mcpServers"]["other"], value["mcpServers"]["other"])
         self.assertNotIn("--allow-edits", updated["mcpServers"]["pastel"]["args"])
+        self.assertNotIn("--no-launch", updated["mcpServers"]["pastel"]["args"])
         self.assertNotIn("private-other-secret", output + error)
         backups = list(self.config.parent.glob("config.json.pastel-backup-*"))
         self.assertEqual(len(backups), 1)
@@ -173,9 +180,19 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(status, 0, error)
         entry = json.loads(output)["mcpServers"]["pastel"]
         self.assertIn("--allow-edits", entry["args"])
+        self.assertNotIn("--no-launch", entry["args"])
         self.assertEqual(set(entry), {"command", "args"})
         self.assertNotIn("token", output.lower())
         self.assertEqual(entry["args"][:2], [str(setup.managed_directory() / "pastel_mcp.py"), "serve"])
+
+    def test_automatic_first_connection_can_be_explicitly_disabled_in_both_config_formats(self):
+        self.install()
+        status, output, error = self.cli("init-config", "--app", str(self.app), "--no-launch")
+        self.assertEqual(status, 0, error)
+        self.assertIn("--no-launch", json.loads(output)["mcpServers"]["pastel"]["args"])
+        status, output, error = self.cli("init-config", "--format", "codex", "--app", str(self.app), "--no-launch")
+        self.assertEqual(status, 0, error)
+        self.assertIn('"--no-launch"', output)
 
     def test_existing_entry_requires_explicit_replace(self):
         self.install()
@@ -251,6 +268,7 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(status, 0, error)
         self.assertTrue(output.startswith("[mcp_servers.pastel]\n"))
         self.assertIn(json.dumps(str(setup.managed_directory() / "pastel_mcp.py"), ensure_ascii=False), output)
+        self.assertNotIn('"--no-launch"', output)
         self.assertEqual(self.cli("init-config", "--format", "codex", "--app", str(self.app), "--output", str(toml))[0], 1)
         self.assertEqual(toml.read_text(), 'model = "keep"\n')
 
@@ -281,10 +299,86 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(json.loads(output), {"checks": {"python": True, "appleSiliconMac": True, "installedApp": True, "managedBridge": True}, "connected": None, "ready": True})
         self.assertNotIn("private-token", output + error)
 
+    def test_serve_forwards_first_connection_policy_and_explicit_launch_opt_out(self):
+        for options in ((), ("--no-launch",), ("--allow-edits",), ("--no-launch", "--allow-edits")):
+            with self.subTest(options=options):
+                bridge = mock.Mock()
+                module = argparse.Namespace(PastelBridge=mock.Mock(return_value=bridge))
+                with mock.patch.object(setup, "load_bridge", return_value=module):
+                    status, output, error = self.cli("serve", "--app", str(self.app), *options)
+                self.assertEqual(status, 0, error)
+                module.PastelBridge.assert_called_once_with(app=self.app, launch="--no-launch" not in options,
+                                                           read_only="--allow-edits" not in options)
+                bridge.serve.assert_called_once_with()
+                bridge.close.assert_called_once_with()
+                self.assertEqual(output, "")
+
+    def test_missing_app_guides_app_store_install_and_open_before_loading_transport(self):
+        with mock.patch.object(setup, "valid_app", return_value=False), \
+                mock.patch.object(setup.subprocess, "run", return_value=argparse.Namespace(returncode=0, stdout=b"")), \
+                mock.patch.object(setup, "load_bridge", side_effect=AssertionError("must not load transport")):
+            status, output, error = self.cli("serve")
+        self.assertEqual(status, 1)
+        self.assertEqual(output, "")
+        self.assertIn("App Store", error)
+        self.assertIn("Aquarell", error)
+        self.assertIn("open", error)
+
+    def test_missing_configured_app_uses_install_guidance_without_fallback(self):
+        with mock.patch.object(setup, "load_bridge", side_effect=AssertionError("must not load transport")):
+            status, output, error = self.cli("serve", "--app", str(self.home / "missing.app"))
+        self.assertEqual(status, 1)
+        self.assertEqual(output, "")
+        self.assertIn("App Store", error)
+        self.assertIn("Aquarell", error)
+        self.assertIn("open", error)
+
+    def test_serve_failure_still_closes_transport(self):
+        bridge = mock.Mock()
+        bridge.serve.side_effect = OSError("fixture failure")
+        module = argparse.Namespace(PastelBridge=mock.Mock(return_value=bridge))
+        with mock.patch.object(setup, "load_bridge", return_value=module):
+            status, _, _ = self.cli("serve", "--app", str(self.app))
+        self.assertEqual(status, 1)
+        bridge.close.assert_called_once_with()
+
+    def test_pair_is_explicit_one_shot_and_outputs_no_credentials(self):
+        for options in ((), ("--allow-edits",)):
+            with self.subTest(options=options):
+                bridge = mock.Mock()
+                bridge.connection.return_value = {"pid": 123, "port": 456,
+                                                  "token": "private-pair-fixture-token"}
+                module = argparse.Namespace(PastelBridge=mock.Mock(return_value=bridge), BridgeError=RuntimeError)
+                with mock.patch.object(setup, "load_bridge", return_value=module):
+                    status, output, error = self.cli("pair", "--app", str(self.app), *options)
+                self.assertEqual(status, 0, error)
+                self.assertEqual(json.loads(output), {"paired": True})
+                self.assertEqual(error, "")
+                module.PastelBridge.assert_called_once_with(app=self.app, launch=True, manual_bootstrap=True,
+                                                           read_only="--allow-edits" not in options)
+                bridge.connection.assert_called_once_with()
+                bridge.serve.assert_not_called()
+                bridge.close.assert_called_once_with()
+                self.assertNotIn("private-pair-fixture-token", output + error)
+
+    def test_pair_failure_closes_transport_and_redacts_exception(self):
+        bridge = mock.Mock()
+        bridge.connection.side_effect = RuntimeError("private-pair-fixture-token")
+        module = argparse.Namespace(PastelBridge=mock.Mock(return_value=bridge), BridgeError=RuntimeError)
+        with mock.patch.object(setup, "load_bridge", return_value=module):
+            status, output, error = self.cli("pair", "--app", str(self.app))
+        self.assertEqual(status, 1)
+        self.assertEqual(output, "")
+        self.assertIn("Pairing failed", error)
+        self.assertNotIn("private-pair-fixture-token", error)
+        bridge.close.assert_called_once_with()
+
     def test_importing_installed_transport_creates_no_unmanaged_cache(self):
         destination = self.install()
         installed = load("installed_pastel_under_test", destination / "pastel_mcp.py")
-        self.assertTrue(hasattr(installed.load_bridge(), "PastelBridge"))
+        transport = installed.load_bridge()
+        bridge = transport.PastelBridge(paths=[], launch=True, manual_bootstrap=True)
+        bridge.close()
         self.assertFalse((destination / "__pycache__").exists())
         installed.verified_install(destination)
 
@@ -294,9 +388,11 @@ class InstallTests(unittest.TestCase):
         for language in setup.LANGUAGES:
             self.assertEqual(set(catalog[language]), set(catalog["en"]))
             self.assertTrue(all(isinstance(value, str) and value for value in catalog[language].values()))
+            self.assertIn("App Store", catalog[language]["app_missing"])
+            self.assertIn("Aquarell", catalog[language]["app_missing"])
         status, _, error = self.cli("--lang=zh-Hans", "install", "--app", str(self.home / "missing.app"))
         self.assertEqual(status, 1)
-        self.assertIn("应用包", error)
+        self.assertIn("安装", error)
 
 
 class ReleaseTests(unittest.TestCase):
@@ -382,6 +478,7 @@ class ReleaseTests(unittest.TestCase):
             installed_cli = Path(config["mcpServers"]["pastel"]["args"][0])
             self.assertTrue(installed_cli.is_file())
             self.assertNotIn("--allow-edits", config["mcpServers"]["pastel"]["args"])
+            self.assertNotIn("--no-launch", config["mcpServers"]["pastel"]["args"])
             self.assertTrue(json.loads(run("doctor", "--app", str(app)))["ready"])
             run("uninstall")
             self.assertFalse(installed_cli.exists())

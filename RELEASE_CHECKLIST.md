@@ -27,6 +27,12 @@ licensing and compatibility identifiers remain unchanged.
   simultaneous clients, service restart, token revocation, app exit/relaunch,
   focus changes, background behavior and reconnection without edit replay.
   / 验证权限、取消、超时、多客户端及生命周期，确保不重放编辑。
+- [ ] Verify first local connection opens an installed app once, and a missing
+  app produces App Store installation/opening guidance. After quitting, verify
+  discovery, reconnects and client restarts leave it closed; use `pair` to resume
+  MCP. Check `--no-launch` also blocks first opening. / 验证本机首次连接仅自动打开一次，
+  未安装时提示从 App Store 安装并打开。正常退出后，工具发现、重连和客户端重启均
+  不重新打开；用 `pair` 恢复 MCP，并验证 `--no-launch` 禁用首次自动打开。
 - [ ] Create only disposable artwork; check drawing, layers, undo/redo, native
   save/reopen and exports through the shipped bridge. Preserve unrelated data.
   / 使用测试作品验证绘制、图层、撤销、保存重开和导出，保护其他作品。

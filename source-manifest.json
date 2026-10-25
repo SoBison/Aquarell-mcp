@@ -5,18 +5,18 @@
     ".github/workflows/ci.yml": "52d670e0dcf7dd1657fa7cf382150c76c63461e210954662d89bf62ffa21182e",
     ".gitignore": "d6d13ea97074e87aa84224ed52d1d6504f18ce352d8e8d9ad1e788cc5123935c",
     "LICENSE": "c76f740d1521b9bed9ca7a04ad526c310493c62621b1341d623b431736533b30",
-    "README.md": "08725cc91487c9ba42631ea807930e6d3c4a3c6d4e680a37ae8d1a9a19af16ac",
-    "README.zh-CN.md": "79b879dbef3e63f9374740224386bc86802d80a8b5c4711d919844593567aa0d",
-    "RELEASE_CHECKLIST.md": "a9620872b4e7d7e3e0a5d35e55d626b36b10310fb73f2e7288423b3e74e88abe",
+    "README.md": "e0fb85b5a1bb02a9b842b023a873dc02a500bbc9e81c1c135b5e46bc77906a78",
+    "README.zh-CN.md": "b56f30f50d262b96944d6947c8653ae4c17d98b0019dc3088d6ea8871a52d024",
+    "RELEASE_CHECKLIST.md": "354a4b332a7d69e693e502987f5b33373f4b9dfa1a6001f0b83e15a251137a03",
     "SECURITY.md": "e606eafa3b3a5af874b13bfa6a4f53b7b9b741b9cd64ce3c11ca11fc68a3b1c8",
-    "SUPPORT.md": "305aee9d8768fff46f4e24c90109feb056cc23ef25a4078011a4b752f4c80bbc",
-    "VERSION": "b52d8845641f926c4f177b373c8296662b75f5a3f7f6053ee4c13ab6801180c8",
+    "SUPPORT.md": "f36c463ee8f1e8206e88379f9b5286d4f38c42a6d1502f228195c76e01759c22",
+    "VERSION": "efdd0f34e6cf518a11a700ba7bef68869236c8caaadf1e1e4f647b6f8ec47eca",
     "build-release.py": "024af1196dc57e121d3f755211fd70218845c6fbc80879ba3961e71c52351a4f",
-    "locales.json": "99605c4cfe1efd764c16a10a79913f9e8bc5b85d6ce29875ddfbc0bd216c9da9",
-    "pastel-mcp-bridge.py": "6733eb30cb91b6efbbc1317e068fd3e5d9bb2840f39066e77a0aedcfbba087ed",
-    "pastel_mcp.py": "89c1993f6258b0aaeda98db6ac764df1059bfd3d4bcde76941f70ae3082ff149",
-    "tests/test_install.py": "9f9ccb447ed7a9332b8978fe0acf6c2e94f85db61738b06de165759e2e021d59",
-    "tests/test_read_only.py": "3a5fdb3b8fb0bb130d17eb0e4e962a11e3e617f868a744ecd254cb1fec1cacac"
+    "locales.json": "a89a0ae2e46b2a76ca08e20f42270fb29f009e06ec1e1a69e7ede964dc46bf02",
+    "pastel-mcp-bridge.py": "c1ef97507651f3807a958e2732087642a983de5366c14b2673905c95e140d0ad",
+    "pastel_mcp.py": "375a15f5e74083b0706d02792943451b2d609e0827402a24b6339ac2b90254e3",
+    "tests/test_install.py": "d316d7f72185077e2d0131f0bd70c52915e49f70e8e8fb721c7f1b54b202195a",
+    "tests/test_read_only.py": "d13f87aa8ac420c029e6dc9b7febbedfb6937d85e1680634b200ca6e2eb10aa4"
   },
-  "version": "0.1.0-preview.1"
+  "version": "0.1.0-preview.2"
 }
